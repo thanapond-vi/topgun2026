@@ -49,6 +49,7 @@ flowchart LR
         A <-- "OpenAI API" --> L["🧠 LLM gateway<br/>event-llm"]
     end
     I -. "sample (defect, moisture)<br/>วัน Integration" .-> A
+    A -- "logs/" --> D["📱 Dashboard<br/>ดูผลสด · อ่านอย่างเดียว"]
 ```
 
 <sub>ช่วงขายแข่ง (17, 18, 20 พ.ย.) agent ใช้ค่า `sample` ที่ตลาดให้มาเอง เส้นประคือการเชื่อมเฉพาะโจทย์ Integration</sub>
@@ -106,6 +107,7 @@ python3 mock/run_games.py --games 200                      # เทียบก�
 python3 mock/run_games.py --games 200 --strategy strategy_starter
 ```
 วันแข่ง: `cp .env.example .env` แล้วใส่ `MARKET_URL`, `TEAM_KEY`, `LLM_*` ที่ทีมงานแจก (ไฟล์ `.env` ไม่อยู่ใน Git) จากนั้น `python3 main.py`
+และเปิด `python3 dashboard.py` เพื่อดูผลสดจากมือถือโดยไม่แตะเครื่องที่รัน agent ([รายละเอียด](track3-market-agent/README.md#-dashboard-ดูผลสด-ช่วงห้ามแตะเครื่องที่รัน-agent))
 
 **Track 2 · เทรนโมเดล** เทรนบน HPC ของมหาวิทยาลัย แล้วนำไฟล์ `.onnx` มารันบน Pi ดู [track2-edge-ai/](track2-edge-ai/)
 

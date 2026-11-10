@@ -39,6 +39,21 @@ def log(event: str, **data) -> None:
     print(row["time"][11:], event, json.dumps(short, ensure_ascii=False)[:160], flush=True)
 
 
+def write_status(state: dict, tv: dict, llm_on: bool) -> None:
+    """Snapshot for dashboard.py: the last market state plus our TV estimates. Read-only, never sends anything."""
+    try:
+        LOGS.mkdir(exist_ok=True)
+        row = {"time": datetime.now().isoformat(timespec="seconds"), "llm": llm_on, "tv": tv,
+               **{k: state.get(k) for k in ("market", "team_id", "phase", "paused", "seconds_left", "round", "lots",
+                                            "rfqs", "my_open_offers", "capacity_left_kg", "round_capacity_kg",
+                                            "appraisal_submitted", "last_results", "standings", "salvage_ratio")}}
+        tmp = LOGS / "status.json.tmp"
+        tmp.write_text(json.dumps(row, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(LOGS / "status.json")
+    except OSError:
+        pass                                        # the dashboard is optional; never stop the agent for it
+
+
 def send_offers(api: Market, offers: list[dict]) -> list[dict]:
     """Send all offers at once; if the batch is rejected, send them one by one and skip the bad ones."""
     try:
@@ -74,6 +89,7 @@ def play(api: Market, llm: LLM | None, forever: bool) -> None:
             memory = Memory(LOGS / f"memory-{state['market']}-{tag}.json")
             log("new_game", market=state["market"], lots=len(state["lots"]), tv=tv)
         phase = state["phase"]
+        write_status(state, tv, llm is not None)
 
         if phase == "APPRAISAL" and not state["appraisal_submitted"]:
             try:
