@@ -1,0 +1,10 @@
+# Class names for Track 2. Code reads them from here, so a change on competition day needs no code edit.
+# Source: organizer slide "Track 2.pdf" (Edge AI Track Pre-Camp Preview). Confirm against the labels in the official dataset.
+good: Good
+defects:
+  - Shell            # เมล็ดหูช้าง
+  - Full Black       # เมล็ดดำ
+  - Hull/Husk        # เศษกะลา / เปลือกเชอร์รี่แห้ง
+  - Broken           # แตกหักจากการสี
+  - Parchment        # เมล็ดกะลา
+  - Immature         # เมล็ดดิบ / อ่อน

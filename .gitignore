@@ -1,0 +1,31 @@
+# secrets
+.env
+*.pem
+*.ppk
+id_ed25519*
+id_rsa*
+# python
+__pycache__/
+.venv/
+*.pyc
+.ipynb_checkpoints/
+# outputs
+logs/
+handin.zip
+runs/
+# large files: keep weights and datasets outside Git
+*.pt
+*.onnx
+*.engine
+datasets/
+# os / editors
+.DS_Store
+.idea/
+.vscode/
+~$*
+
+# private notes (HPC access etc.): stay on this computer, never pushed
+docs/private/
+
+# organizer slides are public in khthana/Coffee-TESA-starter; link there instead of copying 8 MB of PDFs
+track3-market-agent/slides/

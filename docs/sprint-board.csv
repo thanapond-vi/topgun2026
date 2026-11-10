@@ -1,0 +1,33 @@
+id,epic,task,owner,size,priority,sprint,status,done_when,note
+P-01,PM,Kickoff ประชุมทีม อธิบาย Scrum และบทบาท,PM,S,Must,PREP,To Do,ทุกคนรู้ track และหน้าที่ตัวเอง,
+P-02,PM,ตกลงรูปแบบ JSON ระหว่าง Track (ความชื้น % / จำนวนเม็ดต่อคลาส / สัดส่วนเสีย),PM,S,Must,PREP,To Do,มีไฟล์ตัวอย่าง JSON ที่ทุก track ยอมรับ,T1/T2 ส่งต่อให้ T3
+P-03,PM,ตั้ง Git repo กลางและโฟลเดอร์ต่อ track,PM,S,Must,PREP,To Do,ทุกคน push ได้,
+P-04,PM,Checklist อุปกรณ์ + ของสำรอง (ESP32 สำรอง / Pi / สายไฟ / SD card / multimeter),PM,S,Must,PREP,To Do,ของครบตาม checklist และทดสอบเปิดได้,
+P-05,PM,Offline bundle: pip wheels / โมเดล / Arduino libs / เอกสาร ลงเครื่อง,PM,M,Must,PREP,To Do,ติดตั้งได้โดยปิด WiFi,
+P-06,PM,เลือกคนเข้าห้อง Track 3 วันที่ 17+18 (E + สำรอง 1),PM,S,Must,PREP,To Do,มีชื่อ 2 คน ยืนยันว่าเข้าได้ทั้ง 2 วัน,ต้องเป็นคนเดิมทั้ง 2 วัน
+P-07,PM,ซ้อมเต็มระบบ (dry run) T1 → T3 และ T2 → T3,ทุกคน,L,Must,PREP,To Do,ส่งข้อมูลครบวงจรได้ 3 รอบติดกัน,วันที่ 16 พ.ย.
+P-08,PM,รายการคำถามถามผู้จัดวันที่ 17,PM,S,Should,PREP,To Do,มีรายการคำถามพร้อม,ดูหัวข้อ 10.7 ใน bidding-strategy.md
+T1-01,Track 1,ESP32 ต่อ WiFi และส่งข้อความทดสอบผ่าน MQTT/HTTP,June,M,Must,PREP,To Do,เห็นข้อความบน broker/server,
+T1-02,Track 1,อ่าน Analog (ADC) + ทดลองวงจรแบ่งแรงดัน วัดเทียบ multimeter,Jeff,M,Must,PREP,To Do,ค่า ADC สอดคล้องกับ multimeter,
+T1-03,Track 1,ใช้ PWM สร้างสัญญาณ (เผื่อเซนเซอร์แบบ capacitive),June,S,Should,PREP,To Do,วัดสัญญาณได้ตามความถี่ที่ตั้ง,
+T1-04,Track 1,ต้นแบบเซนเซอร์ความชื้นจากชิ้นส่วนพื้นฐาน (resistive / capacitive),Jeff,L,Must,PREP,To Do,ค่าที่อ่านต่างกันชัดระหว่างเมล็ดแห้งกับชื้น,
+T1-05,Track 1,Calibration: วัดเมล็ดหลายระดับความชื้น ทำสมการแปลงเป็น %,June,L,Must,PREP,To Do,มีสมการ + กราฟ ค่าคลาดเคลื่อนที่ยอมรับได้,ต้องหาเมล็ด/วิธีทำความชื้นอ้างอิง
+T1-06,Track 1,ส่งค่าความชื้นตาม JSON ที่ตกลงใน P-02 + กรองค่าสัญญาณรบกวน,June,M,Must,PREP,To Do,T3 อ่านค่าได้,
+T1-07,Track 1,ซ้อมประกอบวงจรจากศูนย์ภายในเวลาจำกัด,Jeff,M,Should,PREP,To Do,ประกอบใหม่ได้ใน < 30 นาที,
+T2-01,Track 2,เตรียมชุดข้อมูลฝึก 7 คลาส (หาข้อมูลสาธารณะ/ถ่ายเอง) จัดแบบโจทย์: train จัดเรียง / test กอง,Boss,M,Must,PREP,To Do,มีภาพครบ 7 คลาส,คลาสต่างจากงานคั่วเดิม
+T2-02,Track 2,สคริปต์ตัดภาพจัดเรียงเป็นรายเม็ดอัตโนมัติ (ต่อยอด bgr_segmentation.py),Boss,M,Must,PREP,To Do,ได้ภาพรายเม็ดหลายร้อยชิ้นจาก ~20 ภาพ,
+T2-03,Track 2,Day 1: เทรน classifier รายเม็ด + augmentation แล้วทำนายภาพกอง,Peach,L,Must,PREP,To Do,ได้ accuracy บนภาพกองทดสอบ + เวลา < 1 วินาทีบน Pi,
+T2-04,Track 2,ปรับ API/MQTT เดิมให้ตอบ จำนวนเม็ดต่อคลาส + สัดส่วนเสีย,Peach,M,Must,PREP,To Do,curl /predict ได้ JSON รูปแบบใหม่,ใช้ app.py เดิม
+T2-05,Track 2,Day 2: สร้าง label bbox/mask อัตโนมัติ + ภาพกองสังเคราะห์ (copy-paste) แล้วเทรน YOLO-seg,Boss,L,Must,PREP,To Do,โมเดลวาด bbox/mask บนภาพกองได้,
+T2-06,Track 2,Day 3: รวมระบบบน Pi (autostart / MQTT / เว็บ) ด้วยโมเดลใหม่,Peach,M,Must,PREP,To Do,รีบูต Pi แล้วพร้อมเองโดยไม่แตะ,
+T2-07,Track 2,สคริปต์ pipeline เทรนจบในคำสั่งเดียว (เผื่อวันแข่งได้ข้อมูลใหม่),Boss,M,Should,PREP,To Do,จากโฟลเดอร์ภาพ → ONNX ใน 1 คำสั่ง,ข้อมูลวันแข่งเปลี่ยนทั้งหมด
+T3-01,Track 3,ใช้ starter ของผู้จัด + Python venv + เรียก REST API ได้,Phu,S,Must,PREP,Done,เรียก API ตัวอย่างและอ่าน JSON ได้,track3/ รันกับ mock ได้ครบเกม
+T3-02,Track 3,markup เรียนรู้แยกตามผู้ซื้อ (learned_markups ใน strategy.py),Phu,L,Must,PREP,Done,unit test ตัวอย่างในเอกสารผ่าน,mock: PR 0.895 → 0.945
+T3-03,Track 3,Mock market ตามคู่มือ API + ตัวรันหลายเกม (mock/),Phu,M,Must,PREP,Done,agent วนเล่นจบ 15 รอบกับ mock ได้,track3/HARNESS.md
+T3-04,Track 3,Agent loop + log + config (ใช้ของ starter) + ปฏิทินเทศกาลใน sell_budget,Phu,M,Must,PREP,Done,เปลี่ยน config แล้ว agent ใช้ค่าใหม่รอบถัดไป,ปฏิทินยังวัดผลไม่ได้บน mock
+T3-05,Track 3,ประเมินมูลค่า TV จากสูตรใน /v1/calendar (+ ตัวเลือกเผื่อ noise),Phu,M,Should,PREP,Done,รับ JSON จาก T1/T2 แล้วคืนราคาอ้างอิง,เผื่อ noise ไม่ช่วยบน mock จึงปิดไว้
+T3-06,Track 3,เทียบกับ starter บน mock 10 สภาพตลาด,Phu,M,Should,PREP,Done,มีตารางผลเทียบ,ชนะทุกสภาพ 0.03–0.06 PR
+T3-07,Track 3,คนสำรองอ่านโค้ด agent และรันได้เอง,สำรอง,S,Must,PREP,To Do,คนสำรองรัน agent จบเกมได้,
+T3-08,Track 3,"สคริปต์ calibration สำหรับตลาดฝึกวันงาน (noise จาก reveal, เพดานจาก ABOVE_LIMIT)",Phu,M,Must,PREP,To Do,รันกับ mock แล้วได้ค่าแนะนำใน 5 นาที,ใช้จริง 17 พ.ย. 15:15–17:00
+T3-09,Track 3,ฝึก LLM ด้วย Ollama (qwen3.5:4b) เทียบ PR กฎล้วน vs กฎ+LLM บน mock,Phu,M,Should,PREP,To Do,มีตารางเทียบ PR,วันแข่งใช้ได้เฉพาะ gateway ผู้จัด
+T3-10,Track 3,ซ้อมกรณีผิดพลาด: LLM ล่ม / รีสตาร์ตกลางรอบ / pack.py,Phu,S,Must,PREP,To Do,ทุกกรณีเล่นจนจบเกมได้,

@@ -1,0 +1,10 @@
+{
+  "lot_id": "LOT-01",
+  "source": "pi5-01",
+  "ts": "2026-11-19T10:16:00+07:00",
+  "counts": {"Good": 182, "Shell": 4, "Full Black": 2, "Hull/Husk": 1, "Broken": 6, "Parchment": 3, "Immature": 2},
+  "total": 200,
+  "defect_pct": 9.0,
+  "model": "yolo26n-seg-v1",
+  "infer_ms": 260
+}
