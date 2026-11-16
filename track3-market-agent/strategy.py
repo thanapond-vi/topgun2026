@@ -21,12 +21,18 @@ BAG = 60
 #       Price each type differently and move the markups after each round's results
 #       (ACCEPTED -> ask a bit more, OUTBID / ABOVE_LIMIT -> ask less) — จุดนี้ปรับแล้วได้ผลมากที่สุด
 MARKUP = {"SPECIALTY": 1.15, "COMMERCIAL": 1.05, "INSTANT": 1.00}   # starting point per type, then learned per buyer
-MIN_MARKUP, MAX_MARKUP = 0.85, 1.50   # unsold beans go to salvage at 0.80 × TV, so never go near that
+MIN_MARKUP, MAX_MARKUP = 0.81, 1.50   # hard limits; unsold beans go to salvage at 0.80 × TV
 PACE = 1.3                            # offer 1.3 × an even share of each lot per remaining round
+
+# Markup floor per round (see markup_floor(), docs/bidding-strategy.md 10.3 item 5).
+FLOOR_MID = float(os.environ.get("STRATEGY_FLOOR_MID", "0.97"))   # floor for most of the game
+LATE_FROM = 0.8          # over the last 20% of rounds the floor slides down to salvage + FLOOR_END_MARGIN
+FLOOR_END_MARGIN = 0.01  # never below salvage: selling under it earns less than not selling
 
 # How the markup for one buyer moves after a round (see learned_markups()).
 STEP_UP = 0.03          # ACCEPTED: everything sold, ask a bit more next time
-STEP_OUTBID = 0.03      # OUTBID: rivals were cheaper
+STEP_OUTBID = 0.03      # OUTBID: rivals were cheaper (used when the RFQ's closing price is unknown)
+OUTBID_UNDERCUT = 0.01  # OUTBID with a known closing price: go this far under the highest price that sold
 CEILING_MARGIN = 0.02   # stay this far under the lowest markup that came back ABOVE_LIMIT
 # market_summary: an RFQ that ended unfilled (bought_kg < wanted_kg) had no rival pressure, so an ACCEPTED offer
 # there can rise faster. Set STRATEGY_FILL_BONUS=0 to switch this off.
@@ -44,6 +50,7 @@ class Context:
     seconds_left: float = 999         # time left in this round when the state was read
     notes: list = field(default_factory=list)
     markups: dict = field(default_factory=dict)   # learned per buyer and per buyer type, set in decide()
+    floor: float = MIN_MARKUP                     # lowest markup this round, set in decide()
 
 
 def learned_markups(memory) -> dict[str, float]:
@@ -61,6 +68,7 @@ def learned_markups(memory) -> dict[str, float]:
         return out
     for rnd in memory.rounds:
         buyer_of = {row["rfq_id"]: (row["buyer"], row["buyer_type"]) for row in rnd.get("market_summary", [])}
+        price_max = {row["rfq_id"]: row["price_max"] for row in rnd.get("market_summary", []) if row.get("price_max")}
         unfilled = {row["rfq_id"] for row in rnd.get("market_summary", [])
                     if row.get("bought_kg") is not None and row.get("wanted_kg") and row["bought_kg"] < row["wanted_kg"]}
         sent = {(o["rfq_id"], o["lot_id"]): o for o in memory.sent.get(rnd["round_id"], [])}
@@ -77,6 +85,12 @@ def learned_markups(memory) -> dict[str, float]:
                 new = m
             elif o["status"] == "OUTBID":
                 new = m - STEP_OUTBID
+                # price_max may count every offer or only the ones that sold (not documented): use it only
+                # when it is below our markup, i.e. it can only be a price that beat us
+                if o["rfq_id"] in price_max and s.get("price_per_kg") and m > 0:
+                    closing = price_max[o["rfq_id"]] / (s["price_per_kg"] / m)
+                    if closing < m:
+                        new = closing - OUTBID_UNDERCUT
             elif o["status"] == "ABOVE_LIMIT":
                 ceiling[buyer] = min(ceiling.get(buyer, 9.0), m)
                 new = m - CEILING_MARGIN - STEP_OUTBID
@@ -93,7 +107,28 @@ def learned_markups(memory) -> dict[str, float]:
 
 def markup_for(ctx, buyer: str, buyer_type: str) -> float:
     m = ctx.markups if ctx.markups else MARKUP
-    return m.get(buyer, m.get(buyer_type, MARKUP.get(buyer_type, 1.0)))
+    return max(m.get(buyer, m.get(buyer_type, MARKUP.get(buyer_type, 1.0))), ctx.floor)
+
+
+def markup_floor(state: dict, ctx) -> float:
+    """Lowest markup to offer this round.
+
+    FLOOR_MID for most of the game, sliding to salvage + FLOOR_END_MARGIN over the last rounds.
+    If we are behind schedule (more beans left than full-capacity rounds after this one can sell),
+    drop straight to the end floor so the beans sell instead of going to salvage.
+    """
+    floor_end = ctx.rules.get("salvage_ratio", 0.80) + FLOOR_END_MARGIN
+    rnd = state["round"]
+    if rnd["kind"] == "practice":
+        late = 0.0
+    else:
+        total = total_rounds(state, ctx)
+        late = min(1.0, max(0.0, (rnd["number"] - 1 - LATE_FROM * total) / ((1 - LATE_FROM) * total)))
+    floor = FLOOR_MID - (FLOOR_MID - floor_end) * late
+    cap = state.get("round_capacity_kg")
+    if cap and sum(l["kg_available"] for l in state["lots"]) > cap * (rounds_left(state, ctx) - 1):
+        floor = floor_end
+    return max(min(floor, FLOOR_MID), floor_end)
 
 
 def spec_ok(sample: dict, spec: dict) -> bool:
@@ -103,8 +138,13 @@ def spec_ok(sample: dict, spec: dict) -> bool:
             and (spec["min_screen"] is None or sample["screen"] >= spec["min_screen"]))
 
 
+def total_rounds(state: dict, ctx: Context) -> int:
+    # round.of is this game's count; rules.timeline can be a fixed default (the mock always says 8)
+    return state["round"].get("of") or ctx.rules["timeline"]["rounds"]
+
+
 def rounds_left(state: dict, ctx: Context) -> int:
-    rnd, total = state["round"], ctx.rules["timeline"]["rounds"]
+    rnd, total = state["round"], total_rounds(state, ctx)
     return total if rnd["kind"] == "practice" else total - rnd["number"] + 1
 
 
@@ -284,7 +324,7 @@ def guard(state: dict, ctx: Context, plan: list[dict]) -> list[dict]:
         kg = min(p["bags"] * BAG, lot_left[lot["lot_id"]], rfq_left[rfq["rfq_id"]], room) // BAG * BAG
         if kg < BAG:
             continue
-        markup = min(max(p["markup"], MIN_MARKUP), MAX_MARKUP)
+        markup = min(max(p["markup"], ctx.floor, MIN_MARKUP), MAX_MARKUP)
         offers.append({"rfq_id": rfq["rfq_id"], "lot_id": lot["lot_id"], "kg": kg,
                        "price_per_kg": round(markup * ctx.tv[lot["lot_id"]], 2)})
         seen.add((p["lot_id"], p["rfq_id"]))
@@ -297,6 +337,7 @@ def guard(state: dict, ctx: Context, plan: list[dict]) -> list[dict]:
 def decide(state: dict, ctx: Context) -> tuple[list[dict], str]:
     """Returns (offers, source) where source is "llm" or "rules"."""
     ctx.markups = learned_markups(ctx.memory)
+    ctx.floor = markup_floor(state, ctx)
     cands = candidates(state, ctx)
     if not cands:
         return [], "none"
