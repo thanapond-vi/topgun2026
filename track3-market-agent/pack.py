@@ -15,7 +15,8 @@ HERE = Path(__file__).parent
 OUT = HERE / "handin.zip"
 SKIP_DIRS = {".venv", "venv", "__pycache__", ".git", ".ipynb_checkpoints", "node_modules", "site-packages"}
 ENV_OK = {".env.example", ".env.sample", ".env.template"}
-MAX_FILE = 5 * 1024 * 1024
+MAX_FILE = 5 * 1024 * 1024     # per file, except under logs/: the reviewers need the whole log
+MAX_ZIP = 20 * 1024 * 1024      # the market's hand-in limit
 
 
 def load_env(path: Path) -> None:
@@ -36,7 +37,7 @@ def pack() -> int:
             name = rel.name
             if (name.startswith(".env") and name not in ENV_OK) or name.endswith(".zip") or name.startswith("~$"):
                 continue
-            if path.stat().st_size > MAX_FILE:
+            if path.stat().st_size > MAX_FILE and rel.parts[0] != "logs":
                 print(f"  ข้าม {rel} (ใหญ่เกิน 5 MB)")
                 continue
             z.write(path, rel.as_posix())
@@ -68,5 +69,8 @@ if __name__ == "__main__":
     print(f"สร้าง {OUT.name} แล้ว: {n} ไฟล์, {size:.1f} MB (ไม่มี .env และ .venv)")
     if not (HERE / "logs" / "decisions.jsonl").exists():
         print("ยังไม่มี logs/decisions.jsonl")
+    if OUT.stat().st_size > MAX_ZIP:
+        sys.exit(f"{OUT.name} ใหญ่เกิน 20 MB ตลาดไม่รับ: ย้ายไฟล์ข้อมูลใหญ่ๆ ออกจากโฟลเดอร์นี้ (ไม่ใช่ logs/) "
+                 "หรือบอกกรรมการให้รับทาง USB")
     if "--send" in sys.argv:
         send()
