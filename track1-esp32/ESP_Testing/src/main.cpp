@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include "secrets.h"   // คัดลอกจาก include/secrets.example.h แล้วใส่ชื่อและรหัส Wi-Fi
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
@@ -6,8 +7,8 @@
 #include <Adafruit_SSD1306.h>
 
 //------------------- 1. WiFi Config --------------------------
-const char* ssid = "Meesuk_Official_2G";         // เปลี่ยนเป็นชื่อ WiFi จริงของคุณ (หรือ "Wokwi-GUEST")
-const char* password = "meesuk_Vip"; // เปลี่ยนเป็นรหัสผ่าน WiFi
+const char* ssid = WIFI_SSID;          // ตั้งใน include/secrets.h (ไม่ขึ้น Git)
+const char* password = WIFI_PASSWORD;  // ตั้งใน include/secrets.h (ไม่ขึ้น Git)
 
 //----------- Connect MQTT ------------------
 const char* mqtt_server = "192.168.1.112";

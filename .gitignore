@@ -29,3 +29,6 @@ docs/private/
 
 # organizer slides are public in khthana/Coffee-TESA-starter; link there instead of copying 8 MB of PDFs
 track3-market-agent/slides/
+
+# device secrets (Wi-Fi etc.): copy secrets.example.h to secrets.h
+secrets.h
