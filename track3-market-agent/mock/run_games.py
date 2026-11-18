@@ -29,7 +29,8 @@ from memory import Memory  # noqa: E402
 def play_one(strat, appr, seed: int, a, tmp: Path) -> dict:
     ns = argparse.Namespace(seed=seed, teams=a.teams, lots=a.lots, rounds=a.rounds, setup_seconds=0,
                             appraisal_seconds=0, round_seconds=0, defect_noise=a.defect_noise,
-                            moisture_noise=a.moisture_noise, ceiling_shift=a.ceiling_shift, rival_kinds=a.rival_kinds)
+                            moisture_noise=a.moisture_noise, ceiling_shift=a.ceiling_shift, rival_kinds=a.rival_kinds,
+                            no_specialty=a.no_specialty, instant_ceilings=a.instant_ceilings)
     m = Market(ns)
     m.phase = "APPRAISAL"
     st = m.state()
@@ -79,6 +80,8 @@ def main():
     p.add_argument("--moisture-noise", type=float, default=0.15)
     p.add_argument("--ceiling-shift", type=float, default=0.0, help="add to every buyer's hidden ceiling (x TV)")
     p.add_argument("--rival-kinds", default="fixed,undercut,adaptive,random", help="comma list cycled over rivals")
+    p.add_argument("--no-specialty", action="store_true", help="no SPECIALTY RFQs (like the scored round of 17 Nov)")
+    p.add_argument("--instant-ceilings", default=None, help="'lo,hi' INSTANT ceiling range x TV, e.g. 0.90,0.99")
     a = p.parse_args()
     strat, appr = importlib.import_module(a.strategy), importlib.import_module(a.appraisal)
     by_kind = defaultdict(list)

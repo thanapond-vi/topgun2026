@@ -6,6 +6,7 @@ caller falls back to rules. Local LLMs fail often — the agent must survive tha
 import json
 import re
 import time
+import threading
 
 from openai import OpenAI
 
@@ -24,30 +25,61 @@ class LLM:
         self.max_tokens, self.temperature = max_tokens, temperature
         self.style = 0
         self.last_error = None
+        self.on_call = None   # main.py sets this to save every prompt/answer to logs/games/<game>/llm.jsonl
+
+    def _record(self, system: str, user: str, text: str | None, answer, t0: float) -> None:
+        if self.on_call is None:
+            return
+        try:
+            self.on_call({"model": self.model, "seconds": round(time.time() - t0, 1), "system": system, "user": user,
+                          "raw": text, "answer": answer, "error": self.last_error})
+        except Exception:                                # noqa: BLE001 — logging must never break the agent
+            pass
 
     def ask_json(self, system: str, user: str, schema: dict, timeout: float | None = None) -> dict | None:
         self.last_error = None
-        client = self.client.with_options(timeout=min(timeout, self.timeout)) if timeout else self.client
+        limit = min(timeout, self.timeout) if timeout else self.timeout
+        client = self.client.with_options(timeout=limit)
         t0 = time.time()
         for style in range(self.style, len(THINKING_STYLES)):
-            try:
-                r = client.chat.completions.create(
-                    model=self.model, temperature=self.temperature, max_tokens=self.max_tokens,
-                    messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                    response_format={"type": "json_schema", "json_schema": {"name": "answer", "schema": schema}},
-                    **THINKING_STYLES[style](self.thinking))
-            except Exception as e:                       # noqa: BLE001 — any failure means "use the fallback"
+            # The HTTP timeout is per read, not for the whole call (17-18 Nov test: a 47 s Qwen call with a 25 s
+            # round). Wait on a thread with a hard wall-clock deadline so the rules still send before the round ends.
+            box: dict = {}
+            kwargs = dict(model=self.model, temperature=self.temperature, max_tokens=self.max_tokens,
+                          messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                          response_format={"type": "json_schema", "json_schema": {"name": "answer", "schema": schema}},
+                          **THINKING_STYLES[style](self.thinking))
+
+            def call():
+                try:
+                    box["r"] = client.chat.completions.create(**kwargs)
+                except Exception as e:                   # noqa: BLE001
+                    box["e"] = e
+
+            worker = threading.Thread(target=call, daemon=True)   # daemon: a late reply never blocks exit
+            worker.start()
+            worker.join(timeout=max(1.0, limit - (time.time() - t0)))
+            if worker.is_alive():
+                self.last_error = f"deadline: no answer within {limit:.0f} s"
+                self._record(system, user, None, None, t0)
+                return None
+            if "e" in box:                               # any failure means "use the fallback"
+                e = box["e"]
                 self.last_error = f"{type(e).__name__}: {e}"[:300]
                 if getattr(e, "status_code", None) == 400:   # server did not like this thinking switch
                     continue
+                self._record(system, user, None, None, t0)
                 return None
+            r = box["r"]
             self.style = style
             text = r.choices[0].message.content or ""
             answer = parse_json(text)
             if answer is None:
                 self.last_error = f"not JSON (finish={r.choices[0].finish_reason}): {text[:200]!r}"
             self.seconds = round(time.time() - t0, 1)
+            self._record(system, user, text, answer, t0)
             return answer
+        self._record(system, user, None, None, t0)
         return None
 
 

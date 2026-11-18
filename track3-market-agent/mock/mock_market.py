@@ -165,7 +165,10 @@ class Market:
                 lots = [self._make_lot(f"LOT-T{t:02d}-{i}", self._jitter(q), bags) for i, (q, bags) in enumerate(templates, 1)]
                 self.rivals.append(RivalTeam(f"T{t:02d}", kinds[t % len(kinds)], lots, random.Random(self.rng.random())))
             shift = getattr(a, "ceiling_shift", 0.0)
-            self.ceiling = {name: self.rng.uniform(*CEILINGS[typ]) + shift for name, typ in BUYERS}
+            ceilings = dict(CEILINGS)
+            if getattr(a, "instant_ceilings", None):     # e.g. "0.90,0.99": instructor said INSTANT pays under TV
+                ceilings["INSTANT"] = tuple(float(x) for x in a.instant_ceilings.split(","))
+            self.ceiling = {name: self.rng.uniform(*ceilings[typ]) + shift for name, typ in BUYERS}
             total_kg = sum(l["kg_total"] for l in self.lots)
             self.capacity = math.ceil(total_kg / self.rounds * 1.5 / BAG) * BAG
             # WAITING until the agent first reads /v1/state, like the private scoring market ("รอทีมกดเริ่ม")
@@ -198,7 +201,9 @@ class Market:
         cal = self.calendar[self.round_no - 1]
         supply = sum(l["kg_total"] for l in self.lots) * self.args.teams
         per_round = supply * 0.9 / self.rounds * cal["demand"]
-        buyers = [b for b in BUYERS if b[1] != "SPECIALTY" or self.round_no >= 3]
+        # --no-specialty: scored round 17 Nov had no SPECIALTY RFQ in any round
+        buyers = [b for b in BUYERS if b[1] != "SPECIALTY"
+                  or (self.round_no >= 3 and not getattr(self.args, "no_specialty", False))]
         weights = {"SPECIALTY": 0.6, "COMMERCIAL": 1.4, "INSTANT": 1.0}
         wsum = sum(weights[t] for _, t in buyers)
         rfqs = []
@@ -280,7 +285,12 @@ class Market:
                     rival_results[o["team"]].append({"buyer_type": rfq["buyer_type"], "status": o["status"]})
         for rv in self.rivals:
             rv.learn(rival_results[rv.tid])
+        # all_offers holds copies of our offers: carry the cleared status back, or the agent sees every sale as OUTBID
+        cleared = {o["offer_id"]: o for o in all_offers if o["team"] == "T01"}
         for o in self.my_offers:
+            c = cleared.get(o.get("offer_id"))
+            if c is not None and c["status"] != "OPEN":
+                o["status"], o["filled_kg"] = c["status"], c.get("filled_kg", 0)
             o.setdefault("filled_kg", 0)
             if o["status"] == "OPEN":
                 o["status"] = "OUTBID"
@@ -568,6 +578,8 @@ def main():
     p.add_argument("--moisture-noise", type=float, default=0.15, help="sd of sample moisture_pct vs the true value")
     p.add_argument("--ceiling-shift", type=float, default=0.0, help="add to every buyer's hidden ceiling (x TV)")
     p.add_argument("--rival-kinds", default="fixed,undercut,adaptive,random", help="comma list cycled over rivals")
+    p.add_argument("--no-specialty", action="store_true", help="no SPECIALTY RFQs (like the scored round of 17 Nov)")
+    p.add_argument("--instant-ceilings", default=None, help="'lo,hi' INSTANT ceiling range x TV, e.g. 0.90,0.99")
     args = p.parse_args()
     RULES["timeline"]["rounds"] = args.rounds
     market = Market(args)

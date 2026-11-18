@@ -69,7 +69,24 @@ def render(state: dict, info: dict, tv: dict, memory: dict) -> list[str]:
 
     mem = Mem(memory)
     markups = strategy.learned_markups(mem)
+    rt = strategy.rival_tracker(state, mem)
     out.append("")
+    out.append(f"เรดาร์คู่แข่ง ({rt['rivals_count']} ทีม จากทั้งหมด {rt['teams']} ทีม): "
+               f"ขายไปแล้ว {rt['rivals_sold_kg']:,}/{rt['rivals_initial_kg']:,} kg ({rt['depletion']*100:.1f}%)  "
+               f"เหลือเฉลี่ยทีมละ {rt['avg_bags_left_per_rival']} กระสอบ  "
+               f"(เทียบเท่าคู่แข่งเต็มโควตา {rt['effective_rivals']} ทีม)")
+    if rt["last_wanted_kg"] > 0:
+        out.append(f"  รอบก่อนตลาดรับซื้อ {rt['last_bought_kg']:,}/{rt['last_wanted_kg']:,} kg "
+                   f"(Fill {rt['last_fill_rate']*100:.0f}%)"
+                   + (f"  ผู้ซื้อได้ของไม่ครบ: {', '.join(rt['unfilled_buyers'])}"
+                      if rt["unfilled_buyers"] else ""))
+    if rt["unfilled_buyers"] and not rt["squeeze"]:
+        # tested 17 Nov: with 56 teams rivals still hold most of their stock to the last round, so an unfilled RFQ
+        # usually means offers were above that buyer's ceiling or failed its spec, not that rivals ran out
+        out.append("    คู่แข่งยังมีของเหลือมาก: ไม่ครบเพราะเสนอแพงเกินเพดานหรือไม่ผ่านสเปก ไม่ใช่ขาดของ "
+                   "-> ดันราคาเฉพาะผู้ซื้อที่เรารับได้ (ACCEPTED) รอบก่อน และดูราคาสูงสุดที่ขายได้ในตารางผลก่อน")
+    if rt["squeeze"]:
+        out.append("  >>> [SQUEEZE] ของที่คู่แข่งทั้งตลาดเหลือ น้อยกว่าความต้องการรอบนี้! ดันราคาขึ้นใกล้เพดานได้เลย")
     out.append("markup ที่เรียนได้ (ราคา ÷ TV): " + ", ".join(f"{k} {v:.2f}" for k, v in sorted(markups.items())))
 
     last = state.get("last_results") or {}

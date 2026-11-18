@@ -30,11 +30,51 @@ def load_env(path: Path) -> None:
                 os.environ.setdefault(k.strip(), v.strip())
 
 
+GAME_DIR: Path | None = None   # logs/games/<Practice-01 | Competition-Day18 | Mock-01>/ for the game being played
+
+
+def game_folder(market_url: str, market: str, tag: str) -> Path:
+    """One folder per game for analysis: Practice-01, Practice-02 ... (port 8000), Competition-Day18 (port 8001),
+    Mock-01 ... (anything else). A restart inside the same game (same lots) goes back to the same folder."""
+    from urllib.parse import urlparse
+    root = LOGS / "games"
+    root.mkdir(parents=True, exist_ok=True)
+    index_path = root / "index.json"
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        index = {}
+    key = f"{market}-{tag}"
+    if key not in index:
+        port = urlparse(market_url).port
+        if port == 8001:
+            base = f"Competition-Day{datetime.now():%d}"
+            name, n = base, 2
+            while name in index.values():          # a second competition game on the same day
+                name, n = f"{base}-{n}", n + 1
+        else:
+            prefix = "Practice" if port == 8000 else "Mock"
+            n = 1 + sum(1 for v in index.values() if v.startswith(prefix + "-"))
+            name = f"{prefix}-{n:02d}"
+        index[key] = name
+        index_path.write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
+    folder = root / index[key]
+    folder.mkdir(exist_ok=True)
+    return folder
+
+
 def log(event: str, **data) -> None:
     LOGS.mkdir(exist_ok=True)
     row = {"time": datetime.now().isoformat(timespec="seconds"), "event": event, **data}
-    with open(LOGS / "decisions.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    line = json.dumps(row, ensure_ascii=False) + "\n"
+    with open(LOGS / "decisions.jsonl", "a", encoding="utf-8") as f:   # all games, as the organizer expects
+        f.write(line)
+    if GAME_DIR is not None:
+        try:
+            with open(GAME_DIR / "decisions.jsonl", "a", encoding="utf-8") as f:
+                f.write(line)
+        except OSError:
+            pass
     short = {k: v for k, v in data.items() if k not in ("offers", "notes")}
     print(row["time"][11:], event, json.dumps(short, ensure_ascii=False)[:160], flush=True)
 
@@ -54,6 +94,38 @@ def write_status(state: dict, tv: dict, llm_on: bool) -> None:
         pass                                        # the dashboard is optional; never stop the agent for it
 
 
+_history_seen: set = set()
+
+
+def record_history(state: dict, tv: dict, tag: str, calendar: dict | None = None) -> None:
+    """Keep every market phase for analysis after the game: one full state per (phase, round), appended to
+    logs/games/<game>/history.jsonl. Uses the state the agent already read, so no extra API calls."""
+    rnd = (state.get("round") or {}).get("round_id")
+    key = (tag, state.get("phase"), rnd)
+    if key in _history_seen:
+        return
+    _history_seen.add(key)
+    try:
+        LOGS.mkdir(exist_ok=True)
+        row = {"time": datetime.now().isoformat(timespec="seconds"), "tv": tv, "state": state}
+        if calendar is not None:
+            row["calendar"] = calendar
+        with open((GAME_DIR or LOGS) / "history.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError:
+        pass                                        # analysis only; never stop the agent for it
+
+
+def record_llm(call: dict) -> None:
+    """Every LLM call (prompt, raw reply, parsed answer, error, seconds) -> logs/games/<game>/llm.jsonl."""
+    try:
+        row = {"time": datetime.now().isoformat(timespec="seconds"), **call}
+        with open((GAME_DIR or LOGS) / "llm.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
 def send_offers(api: Market, offers: list[dict]) -> list[dict]:
     """Send all offers at once; if the batch is rejected, send them one by one and skip the bad ones."""
     try:
@@ -70,7 +142,14 @@ def send_offers(api: Market, offers: list[dict]) -> list[dict]:
 
 
 def play(api: Market, llm: LLM | None, forever: bool) -> None:
-    info = api.calendar()
+    global GAME_DIR
+    while True:                                     # started before the market opens: wait instead of crashing
+        try:
+            info = api.calendar()
+            break
+        except Exception as e:                      # noqa: BLE001
+            log("waiting_for_market", error=str(e)[:120])
+            time.sleep(10)
     rules = info["rules"]
     memory, tv, acted, game = None, {}, set(), None
     rng = random.Random()
@@ -86,10 +165,13 @@ def play(api: Market, llm: LLM | None, forever: bool) -> None:
         if lots_key != game:                        # new game (or sandbox reset): start fresh
             game, acted, tv = lots_key, set(), estimate_lots(rules, state["lots"])
             tag = hashlib.sha1(repr(lots_key).encode()).hexdigest()[:8]
-            memory = Memory(LOGS / f"memory-{state['market']}-{tag}.json")
+            GAME_DIR = game_folder(os.environ["MARKET_URL"], state["market"], tag)
+            memory = Memory(GAME_DIR / "memory.json")
             log("new_game", market=state["market"], lots=len(state["lots"]), tv=tv)
+            record_history(state, tv, tag, calendar=info)
         phase = state["phase"]
         write_status(state, tv, llm is not None)
+        record_history(state, tv, tag)
 
         if phase == "APPRAISAL" and not state["appraisal_submitted"]:
             try:
@@ -131,13 +213,30 @@ def play(api: Market, llm: LLM | None, forever: bool) -> None:
         time.sleep(min(5.0, max(0.5, left + 0.2)))
 
 
+def llm_allowed(market_url: str, llm_url: str) -> bool:
+    """Day-18 rules (slide 28): on the competition market (:8001) only the event gateway may be used.
+    A local model (Ollama, Qwen) or cloud LLM there gets the team disqualified. Practice markets may use anything."""
+    from urllib.parse import urlparse
+    m, g = urlparse(market_url), urlparse(llm_url)
+    if m.port != 8001:
+        return True
+    event_hosts = {m.hostname, "161.246.199.191", "202.29.227.22"}   # event WiFi and public IP are the same server
+    return g.hostname in event_hosts and g.port == 4000
+
+
 def main() -> None:
     load_env(HERE / ".env")
     api = Market(os.environ["MARKET_URL"], os.environ["TEAM_KEY"])
     llm = None
+    if os.environ.get("USE_LLM", "1") == "1" and not llm_allowed(os.environ["MARKET_URL"], os.environ.get("LLM_BASE_URL", "")):
+        print("!! competition market but LLM_BASE_URL is not the event gateway (<market host>:4000)."
+              " Rules say any other LLM (cloud or local Ollama/Qwen) = disqualified. LLM OFF, playing with rules only.",
+              flush=True)
+        os.environ["USE_LLM"] = "0"
     if os.environ.get("USE_LLM", "1") == "1":
         llm = LLM(os.environ["LLM_BASE_URL"], os.environ["LLM_MODEL"], os.environ.get("LLM_API_KEY", ""),
                   timeout=float(os.environ.get("LLM_TIMEOUT", "60")), thinking=os.environ.get("LLM_THINKING") == "1")
+        llm.on_call = record_llm
     play(api, llm, "--forever" in sys.argv)
 
 
