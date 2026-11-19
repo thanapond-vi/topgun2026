@@ -385,7 +385,8 @@ class Market:
 
     @staticmethod
     def _public(o):
-        return {k: o[k] for k in ("offer_id", "rfq_id", "lot_id", "kg", "price_per_kg", "status")}
+        return {**{k: o[k] for k in ("offer_id", "rfq_id", "lot_id", "kg", "price_per_kg", "status")},
+                "round_id": o["rfq_id"].split("-")[0]}   # the organizer's starter reads round_id
 
     # ------------------------------------------------------------------ actions
     def appraise(self, body):

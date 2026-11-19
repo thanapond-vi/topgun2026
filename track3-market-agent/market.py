@@ -54,5 +54,9 @@ class Market:
     def offer_batch(self, offers: list[dict], replace_existing: bool = True) -> dict:
         return self.call("POST", "/v1/offers:batch", json={"offers": offers, "replace_existing": replace_existing})
 
+    def results(self, round_id: str) -> dict:
+        """Results of one cleared round (GET /v1/results?round=R3), to fill a round the agent missed."""
+        return self.call("GET", "/v1/results", params={"round": round_id})
+
     def offer(self, o: dict) -> dict:
         return self.call("POST", "/v1/offers", json=o)

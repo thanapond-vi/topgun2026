@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import console
 import strategy
 from appraisal import appraisal_items, estimate_lots
 from llm import LLM
@@ -75,6 +76,8 @@ def log(event: str, **data) -> None:
                 f.write(line)
         except OSError:
             pass
+    if console.on() and event in ("new_game", "appraisal_sent", "offers_sent", "market_closed"):
+        return                                      # console.py shows these in readable form; the file log above is unchanged
     short = {k: v for k, v in data.items() if k not in ("offers", "notes")}
     print(row["time"][11:], event, json.dumps(short, ensure_ascii=False)[:160], flush=True)
 
@@ -126,6 +129,29 @@ def record_llm(call: dict) -> None:
         pass
 
 
+_backfill_tried: set = set()
+
+
+def backfill(api: Market, memory, state: dict) -> None:
+    """See-It (TGR-23): if the agent missed a round (fast market, restart, network drop), its results never came
+    through state.last_results. Fetch each missing real round once with GET /v1/results?round=Rn."""
+    rnd = state.get("round") or {}
+    if rnd.get("kind") == "practice" or not rnd.get("number"):
+        return
+    have = {r.get("round_id") for r in memory.rounds}
+    for n in range(1, rnd["number"]):
+        rid = f"R{n}"
+        if rid in have or rid in _backfill_tried:
+            continue
+        _backfill_tried.add(rid)
+        try:
+            res = api.results(rid)
+            memory.record_results(res)
+            log("backfill", round=rid, offers=len(res.get("my_offers") or []))
+        except Exception as e:                      # noqa: BLE001 — never stop selling for this
+            log("backfill_error", round=rid, error=str(e)[:120])
+
+
 def send_offers(api: Market, offers: list[dict]) -> list[dict]:
     """Send all offers at once; if the batch is rejected, send them one by one and skip the bad ones."""
     try:
@@ -164,19 +190,32 @@ def play(api: Market, llm: LLM | None, forever: bool) -> None:
         lots_key = tuple(sorted((l["lot_id"], json.dumps(l["sample"], sort_keys=True)) for l in state["lots"]))
         if lots_key != game:                        # new game (or sandbox reset): start fresh
             game, acted, tv = lots_key, set(), estimate_lots(rules, state["lots"])
+            _backfill_tried.clear()
             tag = hashlib.sha1(repr(lots_key).encode()).hexdigest()[:8]
             GAME_DIR = game_folder(os.environ["MARKET_URL"], state["market"], tag)
             memory = Memory(GAME_DIR / "memory.json")
+            # the practice market can hand out the same lots again: a memory that already holds real rounds while this
+            # market has not reached a real round yet belongs to an older game -> keep it aside and start empty
+            rnd_now = state.get("round") or {}
+            if any(r.get("kind") != "practice" for r in memory.rounds) and \
+                    (state["phase"] in ("WAITING", "SETUP", "APPRAISAL") or rnd_now.get("kind") == "practice"):
+                old = GAME_DIR / f"memory-old-{datetime.now():%m%d-%H%M%S}.json"
+                (GAME_DIR / "memory.json").rename(old)
+                memory = Memory(GAME_DIR / "memory.json")
+                log("memory_reset", reason="same lots as an older game", kept=old.name)
             log("new_game", market=state["market"], lots=len(state["lots"]), tv=tv)
+            console.show(console.banner, state, tv, info, llm is not None, strategy)
             record_history(state, tv, tag, calendar=info)
         phase = state["phase"]
         write_status(state, tv, llm is not None)
+        console.show(console.paused, state)
         record_history(state, tv, tag)
 
         if phase == "APPRAISAL" and not state["appraisal_submitted"]:
             try:
                 api.appraise(appraisal_items(rules, state["lots"], tv))
                 log("appraisal_sent", tv=tv)
+                console.show(console.appraisal, tv)
             except MarketError as e:
                 log("appraisal_error", error=str(e))
 
@@ -184,7 +223,9 @@ def play(api: Market, llm: LLM | None, forever: bool) -> None:
             rid = state["round"]["round_id"]
             acted.add(rid)
             memory.record_results(state["last_results"])
-            if any(o["round_id"] == rid for o in state["my_open_offers"]):
+            backfill(api, memory, state)
+            console.show(console.results, state, tv)
+            if any(o.get("round_id", rid) == rid for o in state.get("my_open_offers") or []):   # open offers can only be this round's
                 # restarted after sending this round: the market already holds our offers, and a new batch
                 # would replace them (capacity_left_kg no longer counts them, so it would offer less)
                 log("round_already_sent", round=rid, n=len(state["my_open_offers"]))
@@ -200,11 +241,14 @@ def play(api: Market, llm: LLM | None, forever: bool) -> None:
             memory.record_sent(rid, offers, state, tv)
             log("offers_sent", round=rid, source=source, n=len(sent), kg=sum(o["kg"] for o in sent),
                 seconds=round(time.time() - t0, 1), offers=offers, notes=ctx.notes)
+            console.show(console.offers, state, offers, source, time.time() - t0, ctx.notes, tv, getattr(ctx, "floor", None))
+            console.show(console.sent_count, len(offers), len(sent))
 
         elif phase == "CLOSED" and game is not None and "closed" not in acted:
             acted.add("closed")
             memory.record_results(state["last_results"])
             log("market_closed", standings=state["standings"])
+            console.show(console.closed, state, tv)
             if not forever:
                 return
 
