@@ -41,11 +41,15 @@ def rounds_info(g: Path) -> tuple[dict, list, list]:
     since = starts[-1] if starts else ""
     dec = [d for d in dec if d.get("time", "") >= since]
     res = {}
+    stock = None
     for h in load(g / "history.jsonl"):
         if h.get("time", "") < since:
             continue
+        lots = (h.get("state") or {}).get("lots")
+        if lots:
+            stock = sum(l.get("kg_remaining") or 0 for l in lots)
         lr = (h.get("state") or {}).get("last_results") or {}
-        if lr.get("round_id", "").startswith("R"):
+        if str(lr.get("round_id") or "").startswith("R"):
             res[lr["round_id"]] = lr
     stats = {}
     for rid, lr in res.items():
@@ -56,6 +60,7 @@ def rounds_info(g: Path) -> tuple[dict, list, list]:
         stats[rid] = {"fill": sum(o.get("filled_kg") or 0 for o in mine) / kg if kg else None,
                       "inst": sum(r.get("bought_kg") or 0 for r in rows) / w if w else None}
     order = sorted(stats, key=lambda r: int(r[1:]))
+    stats["_stock_kg"] = stock
     return stats, order, dec
 
 
@@ -69,6 +74,7 @@ def main() -> None:
     while True:
         g = game_dir()
         stats, order, dec = rounds_info(g)
+        stock = stats.pop("_stock_kg", None)
         if any(d.get("event") == "market_closed" for d in dec):
             print(f"CLOSED {g.name}")
             return
@@ -77,7 +83,7 @@ def main() -> None:
             print(f"ALERT {bad[-1]['event']} at {bad[-1]['time']} ({g.name})")
             return
         sent = [d for d in dec if d.get("event") == "offers_sent" and str(d.get("round", "")).startswith("R")]
-        if sent and sent[-1].get("n", 0) == 0 and sent[-1]["round"] != "R15":
+        if sent and sent[-1].get("n", 0) == 0 and sent[-1]["round"] != "R15" and stock != 0:   # sold out = fine
             print(f"ALERT no offers in {sent[-1]['round']} ({g.name})")
             return
         if order and order[-1] != seen:
