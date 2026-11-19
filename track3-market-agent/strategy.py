@@ -19,7 +19,7 @@ from pathlib import Path
 # Race-day settings without editing code: STRATEGY_*=value lines in strategy.env (no keys in it; it goes into the
 # hand-in zip so the judges see every change). Read here, before the constants below, because main.py imports this
 # module before it loads .env (so STRATEGY_* lines in .env do nothing). A variable set in the shell still wins.
-_STRATEGY_ENV = Path(__file__).with_name("strategy.env")
+_STRATEGY_ENV = Path(os.environ.get("STRATEGY_ENV_FILE") or Path(__file__).with_name("strategy.env"))   # file override: tests
 _SHELL_VARS = {k for k in os.environ if k.startswith("STRATEGY_")}   # set in the shell before start: these win
 if _STRATEGY_ENV.exists():
     for _line in _STRATEGY_ENV.read_text(encoding="utf-8").splitlines():
@@ -230,6 +230,9 @@ def _recent(memory) -> dict:
     return ev
 
 
+M1_FILL = float(os.environ.get("STRATEGY_M1_FILL", "0.6"))   # rules accept M1 when we sold below this share in 2 rounds
+
+
 def _judge(name: str, value, memory) -> tuple[bool, str]:
     """The rules decide whether a suggested setting fits what the market shows now. Returns (accept, reason)."""
     if value == _base.get(name):
@@ -237,9 +240,9 @@ def _judge(name: str, value, memory) -> tuple[bool, str]:
     ev = _recent(memory)
     short = market_short(memory)
     if name in ("MAX_PER_RFQ", "MAX_PER_RFQ_LATE"):
-        if value and (short or (ev["fill2"] is not None and ev["fill2"] < 0.6)):
-            return True, "market oversupplied or we sold < 60% in 2 rounds"
-        return False, "market not oversupplied and we sell >= 60%"
+        if value and (short or (ev["fill2"] is not None and ev["fill2"] < M1_FILL)):
+            return True, f"market oversupplied or we sold < {M1_FILL:.0%} in 2 rounds"
+        return False, f"market not oversupplied and we sell >= {M1_FILL:.0%}"
     if name == "WAR_MODE":
         if not value and ev["rounds"] >= 2 and not short:
             return True, "Instant not oversupplied in the last 2 rounds"

@@ -43,6 +43,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("game", nargs="?")
     ap.add_argument("--last", type=int, default=0)
+    ap.add_argument("--brief", action="store_true", help="one line per round + signals, no offer lines (fewer tokens)")
     a = ap.parse_args()
     gdir = HERE / "logs" / "games" / a.game if a.game else newest_game()
     hist, dec = load(gdir / "history.jsonl"), load(gdir / "decisions.jsonl")
@@ -100,6 +101,16 @@ def main() -> None:
               + (f" · our fill {our_fill[rid]:.0%}" if rid in our_fill else "")
               + (f" · Instant market fill {inst_fill[rid]:.0%}" if rid in inst_fill else "")
               + (f" · PR now {prs[rid]:.3f}" if rid in prs else ""))
+        if a.brief:
+            lost = [o for o in mine if o["status"] in ("OUTBID", "ABOVE_LIMIT")]
+            if lost:
+                worst = []
+                for o in lost:
+                    s2 = summ.get(o["rfq_id"], {})
+                    t2 = tv.get(o["lot_id"]) or 0
+                    worst.append(f"{str(s2.get('buyer_type', '?'))[:4]} {o['status'][:5]} @{o['price_per_kg'] / t2:.3f}" if t2 else o["status"])
+                print("   lost: " + " · ".join(worst))
+            continue
         for n in d.get("notes") or []:
             if str(n).startswith("guard: price war") or "never sold" in str(n):
                 print(f"   note: {str(n)[:110]}")

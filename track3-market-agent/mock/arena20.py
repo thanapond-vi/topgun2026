@@ -54,7 +54,21 @@ BUYERS20 = [  # name, type, RFQs per round, share of demand, spec
 CEIL20 = {"SPECIALTY": (1.15, 1.30), "COMMERCIAL": (0.99, 1.06), "INSTANT": (0.91, 0.98)}
 START = {"starter": (1.00, 1.00, 1.00), "tuned": (1.10, 1.00, 0.95), "spread1": (1.00, 1.00, 0.97),
          "seeit": (1.06, 0.99, 0.93), "nuxeus": (1.085, 1.03, 0.935), "dumper": (0.92, 0.92, 0.76),
-         "volume": (1.00, 0.96, 0.90), "latedump": (1.10, 1.00, 0.95)}
+         "volume": (1.00, 0.96, 0.90), "latedump": (1.10, 1.00, 0.95), "t45": (1.13, 1.02, 0.92),
+         "nux16": (1.10, 1.03, 0.935), "tgr20": (1.05, 1.00, 0.90), "tgr13": (1.05, 1.00, 0.93),
+         "tgr41": (1.06, 1.00, 0.93)}
+#   tgr41  สาดบัค: price under the ceiling it learned per buyer, +0.01 sold / -0.02 lost, and from 60% of the game
+#          lowers 0.02 per round more so the stock sells out (practice PR 0.921) · simplified from the spotter summary
+MIX_THREAT = "seeit=12,tgr13=12,nux16=8,tgr20=8,tgr41=6,spread1=5,tuned=2,dumper=2"
+# spotter 20 Nov 04:30 (simplified, not their code):
+#   nux16  NU XEUS Gen 16: slow R1-R4 (pace 0.75), fast after R5 (1.65); Instant-only lots fast early; holds Specialty-grade
+#          for SPECIALTY >= 1.075 until R12; Specialty 1.08-1.13, Commercial >= 0.995; last 2 rounds caps S 0.98 C 0.95 I 0.88
+#   tgr20  REAI CMU: start S 1.05 / C 1.00 / I 0.90, +0.01 when nothing lost, -0.02 when lost, one probe bag at +0.02
+#   tgr13  ModEngi market3: price at min(last cut-off, average sold) per buyer minus 0.005, 1 bag at a time, floor 0.85
+MIX_SCOUT = "starter=9,tuned=8,nux16=8,seeit=6,tgr13=6,tgr20=6,spread1=5,t45=5,dumper=2"
+# "t45" (19 Nov): modelled on a real day-18 agent's memory file (team T45, 21/25 bags sold): 1 bag per offer;
+# Specialty starts 1.13 and drops 0.02 every round it does not sell; Commercial +0.02 after a sale, -0.01 after a
+# loss; Instant +0.02 after a sale, -0.02 after a loss; one extra Specialty "probe" bag at +0.03 each round.
 # --world decline (19 Nov): prices fall during the game like 18 Nov. Specialty buyers' ceilings fall DECLINE["SPECIALTY"]
 # per round from R1 (real: cut-off 1.03 -> 0.97 over R1-R3), Instant ceilings fall DECLINE["INSTANT"] per round after
 # INST_DECLINE_FROM (real: best R2-R5, then down), and "latedump" rivals (like tuned) dump everything left from 60% of
@@ -116,6 +130,8 @@ class Bot:
         progress = (rnd - 1) / max(1, rounds)
         last = left <= 1
         pace = 2.0 if self.kind in ("spread1", "seeit", "volume") else 1.3
+        if self.kind == "nux16":
+            pace = 0.75 if rnd <= 4 else 1.05 if rnd == 5 else 1.65
         out, room = [], cap
         budgets = {id(l): min(l["kg_remaining"], max(BAG, math.ceil(l["kg_remaining"] / max(left, 1) * pace / BAG) * BAG))
                    for l in self.lots}
@@ -126,10 +142,12 @@ class Bot:
             for r in rfqs:
                 if passes(lot["sample"], r["spec"]):
                     m = self.price_mk(r, lot, progress, last, cal, crowd)
+                    if m is None:
+                        continue
                     pairs.append((m * tv_of(lot["sample"]) if self.kind != "seeit" else m, lot, r, m))
         pairs.sort(key=lambda x: -x[0] * self.rng.uniform(0.99, 1.01))
         rfq_left = {r["rfq_id"]: r["kg"] for r in rfqs}
-        one_bag = self.kind == "seeit"
+        one_bag = self.kind in ("seeit", "t45", "tgr13")
         for _ in range(3 if one_bag else 1):
             for _, lot, r, m in pairs:
                 b = budgets[id(lot)]
@@ -181,6 +199,15 @@ class Bot:
             else:
                 floor = {"SPECIALTY": 0.92, "COMMERCIAL": 0.92, "INSTANT": 0.86}[t]
             m = max(m, floor)
+        if self.kind == "nux16":
+            if last or progress >= 13 / 15:          # last 2 of 15 rounds (price_mk has no round count)
+                m = min(m, {"SPECIALTY": 0.98, "COMMERCIAL": 0.95, "INSTANT": 0.88}[t])
+            elif t == "SPECIALTY":
+                m = min(max(m, 1.08), 1.13)
+            elif t == "COMMERCIAL":
+                m = max(m, 0.995)
+            elif passes(lot["sample"], {"max_defect_pct": 3.0, "max_moisture_pct": 12.5, "min_screen": 16}) and progress < 0.8:
+                return None                                  # keep Specialty-grade lots away from INSTANT until R12
         if SPEC_DRIFT and t == "SPECIALTY" and self.kind not in ("starter", "dumper"):
             m -= SPEC_DRIFT * round(progress * 15)
         if self.kind == "seeit" and "เทศกาล" in cal["label"]:
@@ -226,6 +253,25 @@ class Bot:
                            for s in [summary.get(o["rfq_id"])] if s and s.get("price_max")]
                 if anchors:
                     new += 0.3 * (min(anchors) + 0.01 - new)
+            elif self.kind == "tgr41":
+                new = (m + 0.01 if sold and not lost else m - 0.02 if lost else m) - (0.02 if progress >= 0.6 else 0.0)
+                if above:
+                    new = min(new, self.ceil[b] - 0.02)
+            elif self.kind == "tgr20":
+                new = m + 0.01 if not lost and not above else m - 0.02
+            elif self.kind == "tgr13":
+                cuts = [(s["price_max"] / tv_of(o["lot"]["sample"]), s["price_avg"] / tv_of(o["lot"]["sample"]))
+                        for o in os_ for s in [summary.get(o["rfq_id"])] if s and s.get("price_max")]
+                new = max(0.85, min(min(c, a) for c, a in cuts) - 0.005) if cuts else (m - 0.02 if lost else m)
+            elif self.kind == "t45":
+                if t == "SPECIALTY":
+                    new = m if sold else m - 0.02
+                elif t == "COMMERCIAL":
+                    new = m + 0.02 if sold and not lost else m - 0.01 if lost and not sold else m
+                else:
+                    new = m + 0.02 if sold and not lost else m - 0.02 if lost and not sold else m
+                if above:
+                    new = min(new, self.ceil[b] - 0.02)
             elif self.kind == "volume":
                 clear = [s["price_max"] / tv_of(o["lot"]["sample"]) for o in os_
                          for s in [summary.get(o["rfq_id"])] if s and s.get("price_max")]
@@ -450,10 +496,18 @@ def main():
     p.add_argument("--decline-spec", type=float, default=None, help="--world decline: Specialty ceiling drop per round")
     p.add_argument("--decline-inst", type=float, default=None, help="--world decline: Instant ceiling drop per round after R5")
     p.add_argument("--demand", type=float, default=0.95, help="buyers' total kg / all teams' kg over the game")
-    p.add_argument("--world", default="", help="'short' = real18 ceilings, demand 0.70, mostly thin-margin rivals · 'decline' = prices fall during the game")
+    p.add_argument("--world", default="", help="'short' = real18 ceilings, demand 0.70, mostly thin-margin rivals · 'decline' = prices fall during the game · 'scout' = rivals from the spotter notes (20 Nov)")
     p.add_argument("--per-game", default="", help="append one CSV row per game to this file (log of every game)")
     p.add_argument("--market", action="store_true", help="print the market's sold markups per buyer type and round")
     a = p.parse_args()
+    if a.world == "threat":
+        a.ceil = a.ceil or "real18"
+        if a.mix == DEFAULT_MIX:
+            a.mix = MIX_THREAT
+    if a.world == "scout":
+        a.ceil = a.ceil or "real18"
+        if a.mix == DEFAULT_MIX:
+            a.mix = MIX_SCOUT
     if a.world == "decline":
         a.ceil = a.ceil or "real18"
         DECLINE["SPECIALTY"] = a.decline_spec if a.decline_spec is not None else 0.0
