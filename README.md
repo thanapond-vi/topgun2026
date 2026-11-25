@@ -69,7 +69,8 @@ flowchart LR
 <summary>คะแนนของแต่ละส่วน (จากเอกสารผู้จัด)</summary>
 
 - **ทุกวัน:** ส่งซอร์สโค้ดก่อน 18:00 และสาธิตให้กรรมการ (กรรมการอย่างน้อย 3 คน)
-- **Track 3:** ประเมินมูลค่า 20 คะแนน + ขาย 80 คะแนนจาก PR = (รายได้ + 0.80 × TV ที่เหลือ) ÷ TV ทั้งหมด · น้ำหนักวัน 17 / 18 / 20 = 20% / 30% / 50%
+- **Track 3:** ประเมินมูลค่า 20 คะแนน + ขาย 80 คะแนนจาก PR = (รายได้ + 0.80 × TV ที่เหลือ) ÷ TV ทั้งหมด · น้ำหนักวัน 17 / 18 / 20 = 15% / 35% / 50% (ตามสไลด์วันที่ 20)
+- **ผล Track 3 ของทีม:** ด่าน 1 ขายมือ อันดับ 16 · ด่าน 2 agent อันดับ 12/56 (PR 0.955) · ด่าน 3 agent อันดับ 51/56 (PR ~0.84) · คะแนนรวมทีม 80/100
 - **รางวัล:** ชนะเลิศ 50,000 · รองอันดับ 1 30,000 · รองอันดับ 2 20,000 · ชมเชย 10,000 · Daily Top Score · Popular Vote
 </details>
 
@@ -88,8 +89,8 @@ flowchart LR
 |:--|:--|:--|
 | 10–15 พ.ย. | เตรียมตัว | งานเตรียมรายคนตาม [บอร์ด](docs/sprint-board.csv) (`PREP`) |
 | 16 พ.ย. | Sprint 0 | เปิดงาน บรรยายโจทย์ อบรม PM · Kickoff |
-| 17 พ.ย. | Sprint Day 1 | อบรมแยกห้อง → ทำโจทย์ · Track 3 ขายด้วยมือ (20%) |
-| 18 พ.ย. | Sprint Day 2 | อบรมแยกห้อง → ทำโจทย์ · Track 3 agent ขาย (30%) |
+| 17 พ.ย. | Sprint Day 1 | อบรมแยกห้อง → ทำโจทย์ · Track 3 ขายด้วยมือ (15%) |
+| 18 พ.ย. | Sprint Day 2 | อบรมแยกห้อง → ทำโจทย์ · Track 3 agent ขาย (35%) |
 | 19 พ.ย. | Sprint Day 3 | โจทย์ Integration ทั้งวัน |
 | 20 พ.ย. | Sprint Day 4 | พัฒนาต่อ → Presentation · Track 3 แข่งจริง (50%) |
 | 21 พ.ย. | Demo | Live Demonstration · ประกาศรางวัล |
@@ -103,11 +104,10 @@ git clone https://github.com/thanapond-vi/topgun2026.git && cd topgun2026
 ```bash
 cd track3-market-agent
 pip install -r requirements.txt
-python3 mock/run_games.py --games 200                      # เทียบกลยุทธ์ด้วย PR เฉลี่ย
-python3 mock/run_games.py --games 200 --strategy strategy_starter
+python3 mock/run_games.py --games 200 --teams 56           # PR และอันดับเฉลี่ยในตลาดจำลอง
 ```
 วันแข่ง: `cp .env.example .env` แล้วใส่ `MARKET_URL`, `TEAM_KEY`, `LLM_*` ที่ทีมงานแจก (ไฟล์ `.env` ไม่อยู่ใน Git) จากนั้น `python3 main.py`
-และเปิด `python3 dashboard.py` เพื่อดูผลสดจากมือถือโดยไม่แตะเครื่องที่รัน agent ([รายละเอียด](track3-market-agent/README.md#-dashboard-ดูผลสด-ช่วงห้ามแตะเครื่องที่รัน-agent))
+ค่ากลยุทธ์ที่ปรับระหว่างแข่งอยู่ใน `strategy.env` (ไม่มี key)
 
 **Track 2 · เทรนโมเดล** เทรนบน HPC ของมหาวิทยาลัย แล้วนำไฟล์ `.onnx` มารันบน Pi ดู [track2-edge-ai/](track2-edge-ai/)
 
@@ -127,7 +127,7 @@ topgun2026/
 │   └── track3-strategy.md    กลยุทธ์การประมูลของ Track 3
 ├── track1-esp32/             firmware/ · calibration/
 ├── track2-edge-ai/           configs/classes.yaml · train/ (HPC) · infer/ (Pi) · models/
-├── track3-market-agent/      starter ของผู้จัด + markup learning + mock/ (ตลาดจำลอง)
+├── track3-market-agent/      agent (main · strategy · appraisal · memory · llm) + mock/ ตลาดจำลอง
 └── integration/              MQTT broker (mosquitto.conf) และตัวรวมข้อมูลล็อต
 ```
 
@@ -140,9 +140,8 @@ topgun2026/
 
 ## 📚 เอกสารเพิ่มเติม
 - [docs/architecture.md](docs/architecture.md) — อธิบายระบบทั้งหมดแบบละเอียด
-- [track3-market-agent/README.md](track3-market-agent/README.md) — แนวคิด markup learning และผลทดสอบบนตลาดจำลอง
 - [docs/track3-strategy.md](docs/track3-strategy.md) — เหตุผลและกลยุทธ์การประมูล
-- [track3-market-agent/คู่มือ-API.md](track3-market-agent/คู่มือ-API.md) — คู่มือ API ตลาดของผู้จัด
+- คู่มือ API ตลาด อยู่ใน [starter ของผู้จัด](https://github.com/khthana/Coffee-TESA-starter)
 
 ## 🙏 ขอบคุณ
 สมาคมสมองกลฝังตัวไทย (TESA) · KMITL วิทยาเขตชุมพร · ผู้จัด Track 3 สำหรับ [starter agent](https://github.com/khthana/Coffee-TESA-starter)

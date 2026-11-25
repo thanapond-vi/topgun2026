@@ -50,8 +50,8 @@ Scrum คือการทำงานเป็นรอบสั้น ๆ (**
 |---|---|---|
 | เตรียมตัว (PREP) | 10–15 พ.ย. | แต่ละคนทำงานเตรียมของตัวเองตามบอร์ด (`sprint` = `PREP`) อัปเดตสถานะในกลุ่มวันละครั้ง ไม่ต้องประชุม Daily |
 | Sprint 0 | 16 พ.ย. | พิธีเปิด บรรยายโจทย์ อบรม Project Management → Kickoff ตั้ง backlog จากโจทย์จริง |
-| Sprint Day 1 | 17 พ.ย. | เช้าอบรมแยกห้อง → Planning ตอนเที่ยง → บ่ายทำโจทย์ (Track 3 แข่งช่วง 1 ขายด้วยมือ 20%) → ส่งงานก่อน 18:00 → Retro |
-| Sprint Day 2 | 18 พ.ย. | เหมือน Day 1 · Track 3 แข่งช่วง 2 agent ขายแทน (30%) |
+| Sprint Day 1 | 17 พ.ย. | เช้าอบรมแยกห้อง → Planning ตอนเที่ยง → บ่ายทำโจทย์ (Track 3 แข่งช่วง 1 ขายด้วยมือ 15%) → ส่งงานก่อน 18:00 → Retro |
+| Sprint Day 2 | 18 พ.ย. | เหมือน Day 1 · Track 3 แข่งช่วง 2 agent ขายแทน (35%) |
 | Sprint Day 3 | 19 พ.ย. | โจทย์ Integration ทั้งวัน |
 | Sprint Day 4 | 20 พ.ย. | พัฒนาต่อ → นำเสนอ (Presentation) · Track 3 แข่งช่วง 3 (50%) |
 | Demo | 21 พ.ย. | Live Demonstration และประกาศรางวัล |
@@ -116,7 +116,7 @@ Backlog → To Do → Doing → Review → Done
 - **Track 1 (June, Jeff)**: วัดความชื้นเมล็ดด้วย ESP32 ต้องเตรียม ESP32 (WiFi, ADC, PWM), breadboard 1–2 แผ่น, multimeter ผู้จัดให้สาย jumper และชิ้นส่วนสร้างเซนเซอร์ — ที่มา `Track 1.pdf`
 - **Track 2 (Boss, Peach)**: ตรวจคุณภาพเมล็ด **7 คลาส** (Good + 6 defect) บน Raspberry Pi 3 ขั้น: Classification → Detection/Segmentation → Integration ข้อมูลเทรนน้อยมาก (2–3 ภาพ/คลาส จัดเรียง) แต่ทดสอบด้วยภาพกอง — ที่มา `Track 2.pdf`
   - ⚠️ repo `prepare_topgun` ที่มีอยู่ทำ **ระดับการคั่ว 4 คลาส** ใช้ซ้ำได้ส่วน API/MQTT/เว็บ/autostart/วัดเวลา แต่ต้องเปลี่ยนโมเดลและรูปแบบผลลัพธ์เป็น "จำนวนเม็ดต่อคลาส + สัดส่วนเมล็ดเสีย"
-- **Track 3 (Phu)**: AI agent ประมูลขายกาแฟแบบปิดซอง 3 ช่วง (17 พ.ย. 20%, 18 พ.ย. 30%, 20 พ.ย. 50%) ได้ starter agent ใช้ LLM ของผู้จัด กติกาเต็มแจก 17 พ.ย. — ที่มา `Track 3.pdf`
+- **Track 3 (Phu)**: AI agent ประมูลขายกาแฟแบบปิดซอง 3 ช่วง (17 พ.ย. 15%, 18 พ.ย. 35%, 20 พ.ย. 50% ตามสไลด์วันที่ 20) ได้ starter agent ใช้ LLM ของผู้จัด กติกาเต็มแจก 17 พ.ย. — ที่มา `Track 3.pdf`
   - มีของแล้ว: กลยุทธ์ DGP ใน `docs/bidding-strategy.md`, ตัวจำลอง `sim/coffee-auction-sim.html`, log `sim/coffee-bid-log.xlsx`
 - คนเข้าห้อง Track 3 วันที่ 17 และ 18 **ต้องเป็นคนเดิม** (แนะนำ E + 1 คนสำรองที่ถนัด Python)
 
