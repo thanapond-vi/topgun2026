@@ -228,8 +228,14 @@ def play(api: Market, llm: LLM | None, forever: bool) -> None:
             if any(o.get("round_id", rid) == rid for o in state.get("my_open_offers") or []):   # open offers can only be this round's
                 # restarted after sending this round: the market already holds our offers, and a new batch
                 # would replace them (capacity_left_kg no longer counts them, so it would offer less)
-                log("round_already_sent", round=rid, n=len(state["my_open_offers"]))
-                continue
+                if os.environ.get("RESEND_ON_RESTART", "1") != "1":
+                    log("round_already_sent", round=rid, n=len(state["my_open_offers"]))
+                    continue
+                # 20 Nov race (user OK): decide again with the new settings; the new batch replaces the old one,
+                # so plan with the full round capacity. If the market rejects it, the old offers stay.
+                log("round_resend", round=rid, n=len(state["my_open_offers"]))
+                state = dict(state, my_open_offers=[],
+                             capacity_left_kg=state.get("round_capacity_kg") or state.get("capacity_left_kg"))
             ctx = strategy.Context(rules, info["calendar"], tv, rng, memory, llm, state["seconds_left"] or 999)
             t0 = time.time()
             try:

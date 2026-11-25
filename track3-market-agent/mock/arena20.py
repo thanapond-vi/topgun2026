@@ -294,6 +294,29 @@ class Bot:
             self.k[b] = max(0.83, min(1.40, new))
 
 
+def _jitter(q, rng):
+    return {"defect_pct": round(max(0.3, q["defect_pct"] + rng.uniform(-2.0, 2.0)), 2),
+            "moisture_pct": round(max(9.5, q["moisture_pct"] + rng.uniform(-0.6, 0.6)), 2),
+            "screen": int(min(18, max(12, q["screen"] + rng.choice((-1, 0, 0, 1)))))}
+
+
+def diff_lots(base, rng, t):
+    """--diff-lots (20 Nov): a rival gets its own lots (quality moved a little, sample noise kept), then bag counts are
+    scaled so its total TV equals ours. Like the practice market, unlike stage 2-3 (same lots for everyone)."""
+    out = []
+    for i, l in enumerate(base, 1):
+        true = _jitter(l["true"], rng)
+        sample = {k: (true[k] + (l["sample"][k] - l["true"][k]) if k != "screen" else true[k]) for k in true}
+        sample["defect_pct"], sample["moisture_pct"] = round(max(0.0, sample["defect_pct"]), 2), round(sample["moisture_pct"], 2)
+        out.append({**l, "lot_id": f"LOT-T{t:02d}-{i}", "true": true, "sample": sample})
+    target = sum(tv_of(l["true"]) * l["kg_total"] for l in base)
+    have = sum(tv_of(l["true"]) * l["kg_total"] for l in out)
+    for l in out:
+        bags = max(1, round(l["kg_total"] // BAG * target / have))
+        l["kg_total"] = l["kg_remaining"] = bags * BAG
+    return out
+
+
 def setup(m: Market, a):
     """Rebuild a freshly reset Market for the arena: identical lots, day-18 buyers, day-20 calendar, new rivals."""
     rng = m.rng
@@ -312,7 +335,10 @@ def setup(m: Market, a):
         kinds.append("tuned")
     m.rivals = []
     for t, kind in enumerate(kinds, 2):
-        lots = [{**l, "lot_id": f"LOT-T{t:02d}-{i}", "kg_remaining": l["kg_total"]} for i, l in enumerate(m.lots, 1)]
+        if getattr(a, "diff_lots", False):
+            lots = diff_lots(m.lots, rng, t)
+        else:
+            lots = [{**l, "lot_id": f"LOT-T{t:02d}-{i}", "kg_remaining": l["kg_total"]} for i, l in enumerate(m.lots, 1)]
         m.rivals.append(Bot(f"T{t:02d}", kind, lots, random.Random(rng.random())))
     m.rival_revenue = {rv.tid: 0.0 for rv in m.rivals}
     m.sold_tv = defaultdict(float)      # team -> true TV of the kg it sold (price ratio = revenue / this)
@@ -495,6 +521,7 @@ def main():
                    " · 'real18' = calibrated 19 Nov to the real day-18 board (winner ~0.976, 11th ~0.955)")
     p.add_argument("--decline-spec", type=float, default=None, help="--world decline: Specialty ceiling drop per round")
     p.add_argument("--decline-inst", type=float, default=None, help="--world decline: Instant ceiling drop per round after R5")
+    p.add_argument("--diff-lots", action="store_true", help="every rival gets its own lots with the same total TV")
     p.add_argument("--demand", type=float, default=0.95, help="buyers' total kg / all teams' kg over the game")
     p.add_argument("--world", default="", help="'short' = real18 ceilings, demand 0.70, mostly thin-margin rivals · 'decline' = prices fall during the game · 'scout' = rivals from the spotter notes (20 Nov)")
     p.add_argument("--per-game", default="", help="append one CSV row per game to this file (log of every game)")

@@ -1099,7 +1099,32 @@ def decide(state: dict, ctx: Context) -> tuple[list[dict], str]:
     ctx.cap = {}
     if LAST_CAP_INST and state["round"]["kind"] != "practice" and rounds_left(state, ctx) <= 1:
         ctx.cap["INSTANT"] = LAST_CAP_INST
+    # 20 Nov race (user OK): markup ceiling per buyer type from strategy.env, 0 = off
+    for _t, _k in (("COMMERCIAL", "STRATEGY_CAP_COM"), ("INSTANT", "STRATEGY_CAP_INST")):
+        _v = float(os.environ.get(_k, "0") or 0)
+        if _v > 0 and state["round"]["kind"] != "practice":
+            ctx.cap[_t] = min(ctx.cap.get(_t, 9.0), _v)
+    # 20 Nov race (user OK): every round, also cap at the cheapest seller of last round - 0.01 (win or lose).
+    # Lowest price that sold for this buyer type / TV of our lowest-TV lot that fits it (same lots for every team).
+    if os.environ.get("STRATEGY_TRACK_MIN", "0") == "1" and state["round"]["kind"] != "practice":
+        _floor = float(os.environ.get("STRATEGY_TRACK_MIN_FLOOR", "0.82"))
+        _summ = (state.get("last_results") or {}).get("market_summary") or []
+        for _t in ("COMMERCIAL", "INSTANT"):
+            _specs = [r["spec"] for r in state["rfqs"] if r["buyer_type"] == _t]
+            _tvs = [ctx.tv[l["lot_id"]] for l in state["lots"]
+                    if l["lot_id"] in ctx.tv and any(spec_ok(l["sample"], sp) for sp in _specs)]
+            _mins = [m["price_min"] for m in _summ if m.get("buyer_type") == _t and m.get("price_min")]
+            if _tvs and _mins:
+                _r = max(min(_mins) / min(_tvs) - float(os.environ.get("STRATEGY_TRACK_MIN_UNDER", "0.01")), _floor)
+                ctx.cap[_t] = min(ctx.cap.get(_t, 9.0), _r)
+                ctx.notes.append("guard: track cheapest seller %s -> cap %.3f" % (_t, ctx.cap[_t]))
     cands = candidates(state, ctx)
+    _only = os.environ.get("STRATEGY_ONLY_TYPES", "")    # 20 Nov R15 (user): e.g. COMMERCIAL
+    if _only and state["round"]["kind"] != "practice":
+        _keep = [c for c in cands if c["buyer_type"] in _only.split(",")]
+        if _keep:
+            cands = _keep
+            ctx.notes.append("guard: only buyer types " + _only)
     if not cands:
         return [], "none"
     if PRACTICE_PROBE and state["round"]["kind"] == "practice":
