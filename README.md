@@ -22,6 +22,7 @@
 ---
 
 ## 📌 สารบัญ
+- [บรรยากาศและผลการแข่งขัน](#-บรรยากาศและผลการแข่งขัน)
 - [ภาพรวม](#-ภาพรวม)
 - [3 Track](#-3-track)
 - [สัญญาข้อมูลระหว่าง Track](#-สัญญาข้อมูลระหว่าง-track)
@@ -30,6 +31,20 @@
 - [โครงสร้าง repo](#-โครงสร้าง-repo)
 - [กติกาของทีม](#-กติกาของทีม)
 - [เอกสารเพิ่มเติม](#-เอกสารเพิ่มเติม)
+
+## 🏆 บรรยากาศและผลการแข่งขัน
+
+**🥇 80.73 points · 7th place · Gold medal**
+
+TESA Top Gun Rally 2026 at KMITL Chumphon was more than a competition. It was a week-long camp where students from universities across Thailand lived, worked and learned together. From the first day we met new friends from other teams. We shared meals and ideas between sessions, and the late nights turned rivals into friends. The camp was full of energy, laughter and a real sense of community.
+
+The competition itself was intense. More than 50 teams fought for every point, and the scoreboard changed after every round. Each track carried real weight:
+- **The hardware and AI tracks:** small mistakes cost a lot.
+- **The live AI agent market:** prices shifted from minute to minute, so strategy had to adapt in real time.
+
+We quickly learned that technical skill alone was not enough. Project Management and Presentation were scored just as seriously. A strong team needed clear planning, honest tracking of risks and decisions, and a pitch that could explain complex work simply and confidently. Those two areas held our team together when the technical tracks were under pressure.
+
+Every track, every checkpoint and every presentation mattered. Through teamwork, long hours and constant improvement, Team Uten finished 7th with 80.73 points and won a gold medal. We are proud of that result. Even more valuable were the experience, the skills and the friendships we take home from the camp.
 
 ## 🔍 ภาพรวม
 แต่ละ Track แยกโฟลเดอร์และทำงานได้เอง คุยกันผ่าน **JSON ตามสัญญาข้อมูล** เท่านั้น จึงพัฒนาพร้อมกันได้โดยไม่ต้องรอกัน
